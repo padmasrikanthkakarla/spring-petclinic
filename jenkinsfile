@@ -15,7 +15,7 @@ git credentialsId: 'github_credentials', url: 'https://github.com/padmasrikanthk
 }
 stage('Build to maven') {
 steps {
-sh "mvn clean package"
+sh "mvn clean packagee"
 }
 post {
      
