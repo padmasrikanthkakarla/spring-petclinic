@@ -1,0 +1,86 @@
+pipeline {
+agent any
+environment {
+        NEXUS_VERSION = "nexus3"        
+        NEXUS_PROTOCOL = "http"      
+        NEXUS_URL = "18.232.137.194:8081"        
+        NEXUS_REPOSITORY = "petclinic"        
+        NEXUS_CREDENTIAL_ID = "nexus_credentails"
+    }
+stages {
+stage('GIT') {
+steps {
+git credentialsId: 'github_credentials', url: 'https://github.com/padmasrikanthkakarla/spring-petclinic.git'
+}
+}
+stage('Build to maven') {
+steps {
+sh "mvn clean package"
+}
+}
+  stage("publish to nexus") {
+            steps {
+                script {                    
+                    pom = readMavenPom file: "pom.xml";                    
+                    filesByGlob = findFiles(glob: "target/*.${pom.packaging}");                    
+                    echo "${filesByGlob[0].name} ${filesByGlob[0].path} ${filesByGlob[0].directory} ${filesByGlob[0].length} ${filesByGlob[0].lastModified}"                   
+                    artifactPath = filesByGlob[0].path;                    
+                    artifactExists = fileExists artifactPath;
+                    if(artifactExists) {
+                        echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version ${pom.version}";
+                        nexusArtifactUploader(
+                            nexusVersion: NEXUS_VERSION,
+                            protocol: NEXUS_PROTOCOL,
+                            nexusUrl: NEXUS_URL,
+                            groupId: pom.groupId,
+                            version: '${BUILD_NUMBER}',
+                            repository: NEXUS_REPOSITORY,
+                            credentialsId: NEXUS_CREDENTIAL_ID,
+                            artifacts: [                               
+                                [artifactId: pom.artifactId,
+                                classifier: '',
+                                file: artifactPath,
+                                type: pom.packaging],                              
+                                [artifactId: pom.artifactId,
+                                classifier: '',
+                                file: "pom.xml",
+                                type: "pom"]
+                            ]
+                        );
+                        sh "curl -v -u admin:nexus ${NEXUS_PROTOCOL}://${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/org/springframework/samples/${pom.artifactId}/${BUILD_NUMBER}/${pom.artifactId}-${BUILD_NUMBER}.${pom.packaging} -o padma.war"
+                    } else {
+                        error "*** File: ${artifactPath}, could not be found";
+                    }
+                }
+            }
+        }
+        stage('post build to tomcat ') {
+steps {
+    withCredentials([usernameColonPassword(credentialsId: 'tomcat_credentails', variable: 'tomcat')]) {
+    sh "curl -v -u ${tomcat} -T padma.war 'http://18.206.85.118:8080/manager/text/deploy?path=/petclinicnexus&update=true'"
+}
+}
+}
+stage ('success'){
+            steps {
+                script {
+                    currentBuild.result = 'SUCCESS'
+                }
+            }
+        }
+}
+post {
+        failure {
+            script {
+                currentBuild.result = 'FAILURE'
+            }
+        }
+
+        always {
+            step([$class: 'Mailer',
+                notifyEveryUnstableBuild: true,
+                recipients: "padmasrikanthaws@gmail.com",
+                sendToIndividuals: true])
+        }
+    }
+}
