@@ -17,6 +17,13 @@ stage('Build to maven') {
 steps {
 sh "mvn clean package"
 }
+post {
+     
+                success {
+                    archiveArtifacts 'target/*.war'
+                    junit '**/target/surefire-reports/*.xml'
+                }
+            }
 }
   stage("publish to nexus") {
             steps {
