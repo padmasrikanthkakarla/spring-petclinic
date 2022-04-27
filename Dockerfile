@@ -1,1 +1,1 @@
-FROM alpine:8-tomcat
+FROM tomcat-8:alpine
